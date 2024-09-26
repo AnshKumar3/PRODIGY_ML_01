@@ -1,77 +1,56 @@
 import streamlit as st
-import pandas as pd
-import pickle
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import mean_squared_error, r2_score
+from PIL import Image
 
+# Load the trained model
+model = tf.keras.models.load_model('C:/my_model_food101.keras')
 
-with open('house_price_model.pkl', 'rb') as file:
-    model = pickle.load(file)
+# Class labels (replace these with the actual labels for your Food-101 dataset)
+class_labels = ['apple_pie', 'baby_back_ribs', 'baklava','beef_carpaccio','beef_tartare','beet_salad','beignets']  # Add all 101 class labels
+# Example calorie estimates for some classes (replace with actual values)
+calorie_dict = {
+    'apple_pie': 237,  # calories per serving
+    'baby_back_ribs': 350,
+    'baklava': 540,
+    'beef_carpaccio':460,
+    'beef_tartare':560,
+    'beet_salad':450,
+    'beignets':340
 
-df = pd.read_csv(r'D:/train.csv')
+}
 
+# Streamlit app
+st.title("Food-101 Image Classification")
+st.write("Upload an image of a food item and the model will predict its class!")
 
-X = df[['GrLivArea', 'BedroomAbvGr', 'FullBath']].fillna(0)
-y_actual = df['SalePrice']
+# File uploader for image input
+uploaded_file = st.file_uploader("Choose a food image...", type="jpg")
+if uploaded_file is not None:
+    # Load the uploaded image
+    img = Image.open(uploaded_file)
+    st.image(img, caption='Uploaded Image.', use_column_width=True)
 
+    st.write("")
+    st.write("Classifying...")
 
-y_pred_all = model.predict(X)
+    # Preprocess the image
+    img = img.resize((150, 150))  # Resize the image to 150x150 (same size as training data)
+    img = image.img_to_array(img)
+    img = np.expand_dims(img, axis=0)  # Add batch dimension
+    img = img / 255.0  # Rescale pixel values
 
-mse = mean_squared_error(y_actual, y_pred_all)
-rmse = np.sqrt(mse)
-r2 = r2_score(y_actual, y_pred_all)
+    # Predict the class
+    predictions = model.predict(img)
+    predicted_class = np.argmax(predictions, axis=1)[0]
+    predicted_label = class_labels[predicted_class]
+    confidence = np.max(predictions) * 100
 
+    # Estimate calories
+    estimated_calories = calorie_dict.get(predicted_label, "N/A")  # Get the calorie estimate or "N/A" if not available
 
-st.title("House Price Prediction")
-
-square_footage = st.number_input("Enter Square Footage", min_value=500, max_value=10000, value=2000, step=100)
-bedrooms = st.number_input("Enter Number of Bedrooms", min_value=1, max_value=10, value=3, step=1)
-bathrooms = st.number_input("Enter Number of Full Bathrooms", min_value=1, max_value=5, value=2, step=1)
-
-
-if st.button("Predict Price"):
-
-    new_house = pd.DataFrame({
-        'GrLivArea': [square_footage],
-        'BedroomAbvGr': [bedrooms],
-        'FullBath': [bathrooms]
-    })
-
-
-    predicted_price = model.predict(new_house)
-
-
-    st.write(f"The predicted price for the house is: ${predicted_price[0]:,.2f}")
-
-    # --- Plotting ---
-    st.write("### Relationship between Square Footage and House Prices")
-    fig, ax = plt.subplots()
-    sns.scatterplot(data=df, x='GrLivArea', y='SalePrice', ax=ax, alpha=0.5)
-    ax.set_title("Square Footage vs House Prices")
-    ax.set_xlabel("Square Footage")
-    ax.set_ylabel("Sale Price")
-    st.pyplot(fig)
-
-
-    st.write("### Distribution of House Prices")
-    fig2, ax2 = plt.subplots()
-    sns.histplot(df['SalePrice'], bins=30, kde=True, ax=ax2)
-    ax2.set_title("Distribution of Sale Prices")
-    st.pyplot(fig2)
-
-    # --- Additional Visualization ---
-    # Scatter plot of actual vs predicted prices
-    st.write("### Predicted vs Actual Prices")
-    fig3, ax3 = plt.subplots()
-    sns.scatterplot(x=y_actual, y=y_pred_all, ax=ax3, alpha=0.6)
-    ax3.set_title("Actual vs Predicted House Prices")
-    ax3.set_xlabel("Actual Sale Price")
-    ax3.set_ylabel("Predicted Sale Price")
-    st.pyplot(fig3)
-
-st.write("## Model Performance")
-st.write(f"Mean Squared Error (MSE): {mse:.2f}")
-st.write(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
-st.write(f"R² Score: {r2:.4f}")
+    # Display the prediction and estimated calories
+    st.write(f"Prediction: **{predicted_label}**")
+    st.write(f"Confidence: **{confidence:.2f}%**")
+    st.write(f"Estimated Calories: **{estimated_calories} kcal**")
